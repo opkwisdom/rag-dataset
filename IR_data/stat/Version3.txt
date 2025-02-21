@@ -1,0 +1,45 @@
+******** Version3 Dataset Statistics ********
+Total Length: 61389
+
+Filed: query_id
+   min_len: 21.00
+   max_len: 22.00
+   avg_len: 21.01
+
+Filed: question
+   min_len: 10.00
+   max_len: 166.00
+   avg_len: 25.31
+
+Filed: query
+   min_len: 1.00
+   max_len: 3.00
+   avg_len: 2.17
+
+Filed: answer
+   min_len: 2.00
+   max_len: 686.00
+   avg_len: 65.98
+
+Filed: gold_id
+   min_len: 21.00
+   max_len: 23.00
+   avg_len: 21.06
+
+Filed: positive_id
+   min_len: 1.00
+   max_len: 9.00
+   avg_len: 1.14
+
+Filed: question_positive_id
+   min_len: 2.00
+   max_len: 10.00
+   avg_len: 3.45
+
+Filed: query_positive_id
+   min_len: 1.00
+   max_len: 10.00
+   avg_len: 4.09
+
+****************************************
+

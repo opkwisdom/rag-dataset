@@ -1,0 +1,40 @@
+******** Raw Dataset Statistics ********
+Total Length: 744961
+
+Filed: query_id
+   min_len: 21.00
+   max_len: 22.00
+   avg_len: 21.01
+
+Filed: question
+   min_len: 3.00
+   max_len: 411.00
+   avg_len: 29.88
+
+Filed: query
+   min_len: 1.00
+   max_len: 12.00
+   avg_len: 2.60
+
+Filed: answer
+   min_len: 1.00
+   max_len: 855.00
+   avg_len: 63.04
+
+Filed: gold_id
+   min_len: 21.00
+   max_len: 23.00
+   avg_len: 21.08
+
+Filed: positive_id_by_query
+   min_len: 1.00
+   max_len: 5000.00
+   avg_len: 68.86
+
+Filed: positive_id_by_answer
+   min_len: 1.00
+   max_len: 4995.00
+   avg_len: 2.43
+
+****************************************
+

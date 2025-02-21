@@ -1,0 +1,40 @@
+******** Filter Dataset Statistics ********
+Total Length: 195855
+
+Filed: query_id
+   min_len: 21.00
+   max_len: 22.00
+   avg_len: 21.01
+
+Filed: question
+   min_len: 10.00
+   max_len: 189.00
+   avg_len: 27.42
+
+Filed: query
+   min_len: 1.00
+   max_len: 3.00
+   avg_len: 2.21
+
+Filed: answer
+   min_len: 1.00
+   max_len: 855.00
+   avg_len: 64.58
+
+Filed: gold_id
+   min_len: 21.00
+   max_len: 23.00
+   avg_len: 21.07
+
+Filed: positive_id_by_query
+   min_len: 2.00
+   max_len: 10.00
+   avg_len: 4.21
+
+Filed: positive_id_by_answer
+   min_len: 1.00
+   max_len: 10.00
+   avg_len: 1.21
+
+****************************************
+
