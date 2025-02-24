@@ -103,8 +103,8 @@ class EfficientDataProcessor:
                 docs_pairs.append(doc_pairs)
                 cans_pairs.append(can_pairs)
                 
-            doc_list.append(doc)
-            doc_id_list.append(doc_id)
+                doc_list.append(doc)
+                doc_id_list.append(doc_id)
         
         # Construct dataset
         doc_pair_dataset = DocPairDataset(docs_pairs)
