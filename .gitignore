@@ -1,0 +1,17 @@
+# bm25
+bm25/index
+bm25/anserini
+
+# PromptRank
+KE/PromptRank
+
+# Data files
+*.json
+*.jsonl
+*.jar
+*.log
+*.gguf
+*.pt
+
+# Cache files
+__pycache__

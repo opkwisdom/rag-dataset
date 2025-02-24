@@ -22,10 +22,6 @@ class CachedPromptRanker:
         self.model.eval()
         
         doc_with_candidates_list = []
-        candidate_list = []
-        cos_score_list = []
-        doc_id_list = []
-        pos_list = []
         
         for i, (docs, cans) in enumerate(tqdm(dataloader, desc="Evaluating ")):
             # Unpack data

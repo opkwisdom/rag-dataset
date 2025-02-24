@@ -3,11 +3,8 @@ import numpy as np
 from argparse import ArgumentParser
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from torch.utils.data import DataLoader
-import pickle
-import torch
 
 from utils import set_config, setup_logger
-from prompt_ranker import CachedPromptRanker
 from data import EfficientDataProcessor, custom_collate_fn
 
 
@@ -55,14 +52,10 @@ def main():
 
     # Make dataset
     data_processor = EfficientDataProcessor(tokenizer, logger, config, args)
-    kpe_dataset, doc_list, doc_id_list = data_processor.generate_dataset()
-    
-    logger.info(f"Dataset size: {len(kpe_dataset)}")
-    logger.info(f"Save dataset to {args.output_dir}")
-    torch.save((kpe_dataset, doc_list, doc_id_list), args.output_dir)
-
-    kpe_dataset, doc_list, doc_id_list = torch.load(args.output_dir)
-    import pdb; pdb.set_trace()
+    if not config['save_mode']:
+        kpe_dataset, doc_list, doc_id_list = data_processor.generate_dataset()
+    else:
+        data_processor.generate_dataset()
 
 if __name__ == "__main__":
     main()

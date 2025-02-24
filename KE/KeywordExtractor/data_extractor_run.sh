@@ -1,10 +1,10 @@
 # Dataset name: Inspec, SemEval2010, SemEval2017, DUC2001, nus, krapivin
 
-dataset_name=passages_candidate_1.jsonl
+dataset_name=passages_candidate_2.jsonl
 batch_size=16
 log_dir=log
-log_filename=efficient_p1
-output_dir=data/kpe_dataset_1.pt
+log_filename=efficient_p2_data
+output_dir=data/kpe_dataset_2
 
 python3 efficient/data_extractor_main.py \
     --dataset_dir ./data/$dataset_name \
