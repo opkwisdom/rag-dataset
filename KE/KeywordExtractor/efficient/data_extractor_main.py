@@ -3,7 +3,8 @@ import numpy as np
 from argparse import ArgumentParser
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from torch.utils.data import DataLoader
-from torch.nn.parallel import DistributedDataParallel as DDP    # Multi-gpu
+import pickle
+import torch
 
 from utils import set_config, setup_logger
 from prompt_ranker import CachedPromptRanker
@@ -46,28 +47,22 @@ def main():
     args = parse_argument()
 
     logger = setup_logger(args.log_dir, args.log_filename)
-    logger.info("Start Testing ...")
+    logger.info("Start Extracting ...")
 
     model = AutoModelForSeq2SeqLM.from_pretrained(config['model_path'])
     model.to(config['device'])
     tokenizer = AutoTokenizer.from_pretrained(config['model_path'])
 
-    logger.info(f"Model: {model}")
-
     # Make dataset
     data_processor = EfficientDataProcessor(tokenizer, logger, config, args)
     kpe_dataset, doc_list, doc_id_list = data_processor.generate_dataset()
+    
+    logger.info(f"Dataset size: {len(kpe_dataset)}")
+    logger.info(f"Save dataset to {args.output_dir}")
+    torch.save((kpe_dataset, doc_list, doc_id_list), args.output_dir)
 
-    dataloader = DataLoader(kpe_dataset, batch_size=args.batch_size, collate_fn=custom_collate_fn)
-    prompt_ranker = CachedPromptRanker(model, tokenizer, logger, config, args)
-    keyphrases = prompt_ranker.extract_keyphrases(dataloader, doc_list, doc_id_list)
-
-    with open(args.output_dir, "w") as f:
-        json.dump(
-            [{k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in item.items()} for item in keyphrases], 
-            f, indent=4, ensure_ascii=False
-        )
-
+    kpe_dataset, doc_list, doc_id_list = torch.load(args.output_dir)
+    import pdb; pdb.set_trace()
 
 if __name__ == "__main__":
     main()

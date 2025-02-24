@@ -4,9 +4,9 @@ dataset_name=passages_candidate_1.jsonl
 batch_size=16
 log_dir=log
 log_filename=efficient_p1
-output_dir=efficient/output/passages_candidate_1.json
+output_dir=data/kpe_dataset_1.pt
 
-python3 efficient/main.py \
+python3 efficient/data_extractor_main.py \
     --dataset_dir ./data/$dataset_name \
     --batch_size $batch_size \
     --log_dir $log_dir \

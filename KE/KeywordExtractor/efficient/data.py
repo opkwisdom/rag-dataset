@@ -76,6 +76,7 @@ class EfficientDataProcessor:
         '''
         Load jsonl file
         '''
+        self.logger.info(f'Reading file...')
         with open(filepath, 'r') as f:
             self.data = [json.loads(d) for d in f]
 

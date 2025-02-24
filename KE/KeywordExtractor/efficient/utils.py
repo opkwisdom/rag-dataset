@@ -10,9 +10,9 @@ def set_config():
     config['en_temp'] = '문단:'
     config['de_temp'] = '이 문단의 핵심 문구:'
     config["position_factor"] = 1.2e8
-    config["length_factor"] = 1.2
+    config["length_factor"] = 1.1
     config['max_len'] = 512
-    config["device"] = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    config["device"] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     return config
 
 def setup_logger(log_dir, log_filename="app.log", log_level=logging.INFO):

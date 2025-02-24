@@ -55,21 +55,20 @@ class CachedPromptRanker:
             
             batch_size = ca_input_ids.shape[0]
             n_candidates = ca_input_ids.shape[1]
-            
             # Candidate padding
             padded_candidates = [row + [''] * (n_candidates - len(row)) for row in candidate]
             candidate_np = np.array(padded_candidates)
-            candidate_len = torch.tensor(
-                np.char.str_len(candidate_np),
-                device=self.config['device']
-            )
             
             # Prefix 출력 계산
             with torch.no_grad():
-                encoder_outputs = self.model.encoder(
+                prefix_outputs = self.model(
                     input_ids=en_input_ids,
-                    attention_mask=en_input_mask
-                )[0]    # (B, enc_L, D)
+                    attention_mask=en_input_mask,
+                    decoder_input_ids=de_input_ids,
+                    use_cache=True
+                )
+                past_key_values = prefix_outputs.past_key_values
+                encoder_outputs = prefix_outputs.encoder_last_hidden_state   # (B, enc_L, D)
             
             # Candidate 출력 계산
             with torch.no_grad():
@@ -78,37 +77,35 @@ class CachedPromptRanker:
                 # 1. flattend_ca_input_ids: 0.035MB (8bytes)
                 # 2. expanded_encoder_outputs: 234MB (4bytes)
                 # 3. expanded_past_key_values: 5.6GB (4bytes)
+                B, N, L = ca_input_ids.shape
+                flattend_ca_input_ids = einops.rearrange(ca_input_ids, 'b n l -> (b n) l')
+                expanded_encoder_outputs = einops.repeat(
+                        encoder_outputs,  # (B, enc_L, D)
+                        "b enc_l d -> 1 (b n) enc_l d", # (1, B*N, enc_L, D)
+                        n=N  # Candidate 개수만큼 복제
+                    )
+                # T5 Dec_k, Dec_v, Enc_k, Enc_v 복제
+                expanded_past_key_values = tuple(
+                    (einops.repeat(dec_k, "b h dec_l d -> (b n) h dec_l d", n=N),
+                    einops.repeat(dec_v, "b h dec_l d -> (b n) h dec_l d", n=N),
+                    einops.repeat(enc_k, "b h enc_l d -> (b n) h enc_l d", n=N),
+                    einops.repeat(enc_v, "b h enc_l d -> (b n) h enc_l d", n=N),)
+                    for dec_k, dec_v, enc_k, enc_v in past_key_values
+                ) # (# of layers, 4, B*N, H, L, D)
 
-                # 한번에 가는 것이 아닌 배치별 seq_len만큼
-                combined_ca_input_ids = torch.cat(
-                    [
-                        einops.repeat(
-                            de_input_ids.unsqueeze(dim=1),
-                            'b 1 dec_pre_L -> b N dec_pre_L',
-                            N=n_candidates
-                        ),  # (B, dec_pre_L) -> (B, 1, dec_pre_L)
-                        ca_input_ids,    # (B, N, dec_L)
-                    ],
-                    dim=-1
-                )   # (B, N, pre + dec_L)
-
-                B, N, L = combined_ca_input_ids.shape
-                
-                # N개 독립적으로 처리
-                batch_logits_list = []
-                for j in range(N):
-                    each_ca_input_ids = combined_ca_input_ids[:, j, :]
-                    output = self.model(
-                        encoder_outputs=(encoder_outputs,),  # Encoder 결과 재사용
-                        decoder_input_ids=each_ca_input_ids,  # Candidate 입력
-                    )[0]    # logits of Seq2SeqLMOutput (B, dec_L, V)
-                    batch_logits_list.append(output)
-
-                # (B, N, dec_L, V)
-                batch_logits = torch.stack(batch_logits_list, dim=1)
-                batch_logits = batch_logits[:, :, self.de_temp_len+1:, :]  # Prefix 제거
+                output = self.model(
+                            encoder_outputs=expanded_encoder_outputs,  # Encoder 결과 재사용
+                            decoder_input_ids=flattend_ca_input_ids,  # Candidate 입력
+                            past_key_values=expanded_past_key_values,  # 캐싱된 Key-Value 사용
+                            use_cache=True
+                        )[0]  # logits of Seq2SeqLMOutput
+                batch_logits = einops.rearrange(
+                    output,
+                    '(b n) dec_l v -> b n dec_l v',
+                    b=B, n=N
+                ) # (B*N, dec_L, V) -> (B, N, dec_L, V)
                 batch_logits = batch_logits.softmax(dim=-1)
-
+                
                 # Candidate 별 점수 계산
                 # 1. Indexing
                 indexed_logits = torch.gather(
@@ -125,11 +122,9 @@ class CachedPromptRanker:
                 ) # (1, 1, dec_L)
                 mask = range_tensor < token_len.unsqueeze(-1)
                 log_logits = torch.log(indexed_logits)
-                # Sum log probs with mask
+                # Sum log probs
                 gen_scores = (log_logits * mask).sum(dim=-1)   # (B, N)
-
-                # Candidates length penalty
-                length_penalty = torch.pow(candidate_len, self.config['length_factor']) # length penalty
+                length_penalty = torch.pow(token_len, self.config['length_factor']) # length penalty
 
                 gen_scores = gen_scores / length_penalty
                 gen_scores[torch.isnan(gen_scores)] = -float('inf')
@@ -145,14 +140,15 @@ class CachedPromptRanker:
                 pos_scores = pos / doc_len +  self.config['position_factor'] / torch.pow(doc_len, 3)
 
                 batch_scores = gen_scores * pos_scores
+                
                 # Find Top-k candidates
                 k = min(15, batch_scores.size(-1))
-                topk_scores, topk_indices = torch.topk(batch_scores, k=k, dim=-1)  # (B, top-k)
+                topk_scores, topk_indices = torch.topk(batch_scores, k=15, dim=-1)  # (B, top-k)
                 topk_indices = topk_indices.cpu().numpy()
 
                 matched_indices = np.arange(B)[:, None]
                 topk_candidates = candidate_np[matched_indices, topk_indices]
-                
+
                 for j, doc in enumerate(batch_doc_list):
                     top_15_can = topk_candidates[j].tolist()
                     doc_with_top_15 = {"id": batch_original_doc_id_list[j], "doc": batch_doc_list[j], "keyphrases": top_15_can}
