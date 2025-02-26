@@ -1,4 +1,5 @@
 import os
+import time
 import json
 from tqdm import tqdm
 from datetime import datetime
@@ -66,8 +67,10 @@ def generate_answer(data, chain):
         "Total Cost": 0,
         "Total Length": 0,
         "Total Count": 0,
+        "Total Time": 0,
     }
 
+    start = time.time()
     for item in tqdm(data, desc="Generating answers"):
         question = item.get('question', '')
         context = item.get('context', '')
@@ -87,6 +90,10 @@ def generate_answer(data, chain):
             metadata["Total Cost"] += cb.total_cost
             metadata["Total Length"] += prompt_length
             metadata["Total Count"] += 1
+    end = time.time()
+    elapsed = end - start
+    formatted_time = time.strftime("%H:%M:%S", time.gmtime(elapsed))    # 시:분:초 형식으로 변환
+    metadata["Total Time"] = formatted_time
 
     return rag_results, metadata
 
