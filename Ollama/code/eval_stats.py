@@ -1,3 +1,4 @@
+import os
 import json
 import numpy as np
 
@@ -119,4 +120,31 @@ def save_results(eval_data, metric_dict, percentile=[0, 5, 10, 20, 40, 60, 80, 1
             json.dump(quantile_results, f, ensure_ascii=False, indent=4)
         print(f"Saved {file_name}")
 
-save_results(eval_data, metrics_dict)
+def retrieve_top_k_results(eval_data, metric_dict):
+    percentile = [i for i in range(0, 101, 5)]
+
+    if os.path.exists(f'../eval/roberta/n_topk.txt'):
+        os.remove(f'../eval/roberta/n_topk.txt')
+
+    for i in range(len(percentile)-1):
+        lower_pct = percentile[i] / 100.0
+        upper_pct = percentile[i + 1] / 100.0
+
+        quantile_results = {}
+        quantile_idx = []
+
+
+        for metric_name, metric_arr in metric_dict.items():
+            sorted_idx = np.argsort(metric_arr)[::-1]
+            start_idx = int(len(metric_arr) * lower_pct)
+            end_idx = int(len(metric_arr) * upper_pct)
+            segment = set(sorted_idx[start_idx:end_idx])
+            quantile_idx.append(segment)
+        
+        selected_idx = list(set.intersection(*quantile_idx))
+        with open(f'../eval/roberta/n_topk.txt', 'a') as f:
+            f.write(f"Top {percentile[i]}%: {len(selected_idx)}\n")
+    
+
+# save_results(eval_data, metrics_dict)
+retrieve_top_k_results(eval_data, metrics_dict)
