@@ -71,8 +71,8 @@ class BertScore:
         }
 
 class Evaluator:
-    def __init__(self):
-        self.bert_evaluator = BertScore()
+    def __init__(self, model_name="klue/bert-base"):
+        self.bert_evaluator = BertScore(model_name=model_name)
     
     def evaluate(self, refs, preds):
         """
@@ -87,9 +87,8 @@ def main():
     with open(input_path, 'r') as f:
         data = [json.loads(line.strip()) for line in f]
     
-    evaluator = Evaluator()
+    evaluator = Evaluator(model_name="klue/roberta-large")
     results = []
-    data = data[:100]
     # 배치 처리
     batch_size = 32  # GPU 메모리에 따라 조정
     with tqdm(range(0, len(data), batch_size), desc="Evaluating") as pbar:
@@ -118,7 +117,7 @@ def main():
             pbar.update(1)
     
     # 결과 저장
-    with open('bert_results.json', 'w') as f:
+    with open('bert_results_roberta_large.json', 'w') as f:
         json.dump(results, f, indent=4, ensure_ascii=False)
 
 if __name__ == "__main__":

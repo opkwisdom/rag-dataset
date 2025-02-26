@@ -1,7 +1,7 @@
 import json
 
 # 평가 결과와 원본 데이터 파일 읽기
-with open('bert_results.json', 'r') as f:
+with open('eval_results.json', 'r') as f:
     eval_results = json.load(f)
 
 with open('../../IR_data/collection/qas_hard_ollama.jsonl', 'r') as f:

@@ -4,10 +4,6 @@ import time
 import os
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
-from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import PromptTemplate
-from langchain_core.prompts.few_shot import FewShotPromptTemplate
 from llama_cpp import Llama
 
 def make_prompt_with_examples(instruction):
@@ -15,6 +11,7 @@ def make_prompt_with_examples(instruction):
     min_length = int(len(answer)*0.8)
     max_length = int(len(answer)*1.2)
 
+    # 3-Shot
     examples = [
         ("통신내역을 사용자 컴퓨터에 저장하는 인터넷 메신저로는 어떤 것들이 있는가?",
          "일부 메신저 서비스는 통신내역을 서버에만 저장하거나 혹은 양쪽 모두에 남겨놓기도 한다. 야후!, Mi3 메신저가 전자에 해당하며 네이트온, 버디버디가 후자에 해당한다."),
@@ -28,11 +25,11 @@ def make_prompt_with_examples(instruction):
     messages = [{"role": "system", "content": f"당신은 유능한 한국어 AI assistant입니다. 사용자의 질문에 대해 아래 형식에 맞게 답변해 주세요. 답변 길이는 {min_length}~{max_length}자로 제한됩니다."}]
     
     for ex_question, ex_answer in examples:
-        messages.append({"role": "user", "content": f"Q: {ex_question}"})
-        messages.append({"role": "assistant", "content": f"A: {ex_answer}"})
+        messages.append({"role": "user", "content": f"{ex_question}"})
+        messages.append({"role": "assistant", "content": f"{ex_answer}"})
     
     # 마지막 질문 추가
-    messages.append({"role": "user", "content": f"Q: {question}\nA:"})
+    messages.append({"role": "user", "content": f"{question}\n"})
 
     return messages
 
@@ -47,7 +44,7 @@ def main():
         data = [json.loads(line.strip()) for line in f]
 
     buffer_data = []
-    chunk_size = 2000
+    chunk_size = 100
 
     # 중간부터 시작하는 것 고려
     start_idx = 0
@@ -59,8 +56,10 @@ def main():
     # Langhcian 구성 (llama 모델 로드)
     llm = Llama(
         model_path="model/llama-3-Korean-Bllossom-8B-Q4_K_M.gguf",
-        n_gpu_layers=32,
+        n_ctx=2048,
+        n_gpu_layers=33,
         use_mmap=True,
+        use_mlock=True
     )
 
     pbar = tqdm(data[start_idx:], desc="Generate answers", initial=start_idx, total=len(data))
@@ -68,12 +67,13 @@ def main():
     # Chatbot을 이용하여 답변 생성
     for i, instruction in enumerate(pbar, start=start_idx+1):
         final_prompt = make_prompt_with_examples(instruction)
-
-        response = llm.create_chat_completion(messages=final_prompt)
-        import pdb; pdb.set_trace()
-
-        instruction['llm_answer'] = response['choices'][0]['message']['content']
         
+        try:
+            response = llm.create_chat_completion(messages=final_prompt)
+            instruction['llm_answer'] = response['choices'][0]['message']['content']
+        except RuntimeError:
+            response = "None"
+            instruction['llm_answer'] = response
 
         buffer_data.append(instruction)        
 
