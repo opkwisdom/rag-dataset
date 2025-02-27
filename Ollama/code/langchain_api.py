@@ -11,8 +11,17 @@ from langchain_community.cache import SQLiteCache   # Cache 설정
 from langchain.globals import set_llm_cache         # Cache 설정
 from langchain_community.callbacks import get_openai_callback   # Metadata 저장
 
+def time_str_to_seconds(time_str):
+    """'HH:MM:SS' 형식의 문자열을 초로 변환"""
+    h, m, s = map(int, time_str.split(":"))
+    return h * 3600 + m * 60 + s
+
+def seconds_to_time_str(seconds):
+    """초를 'HH:MM:SS' 형식의 문자열로 변환"""
+    return time.strftime("%H:%M:%S", time.gmtime(seconds))
+
 def load_data(input_path):
-    """JSONL 파일에서 데이터를 로드합니다."""
+    """JSONL 파일에서 데이터를 로드"""
     data = []
     with open(input_path, 'r', encoding="utf-8") as f:
         for line in f:
@@ -21,14 +30,50 @@ def load_data(input_path):
                 data.append(json.loads(line))
     return data
 
+def load_existing_results(output_path):
+    """기존 결과를 로드"""
+    if os.path.exists(output_path):
+        with open(output_path, 'r', encoding="utf-8") as f:
+            results = json.load(f)
+        return results
+    else:
+        return {
+            "Model": None,
+            "Datetime": "",
+            "metadata": {
+                "Total Prompt": 0,
+                "Total Completion": 0,
+                "Total Tokens": 0,
+                "Total Cost($)": 0,
+                "Total Length": 0,
+                "Total Count": 0,
+                "Total Time": "00:00:00"
+            },
+            "data": []
+        }
+
 def save_results(output_path, results):
-    """결과를 JSON 파일로 저장합니다."""
+    """결과를 JSON 파일로 저장"""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, 'w', encoding="utf-8") as f:
         json.dump(results, f, indent=4, ensure_ascii=False)
 
-def setup_model_and_chain():
-    """모델, 프롬프트 템플릿, 파서, 캐시를 설정하고 체인을 생성합니다."""
+def merge_metadata(existing, new):
+    merged = {}
+    merged["Total Prompt"] = existing.get("Total Prompt", 0) + new.get("Total Prompt", 0)
+    merged["Total Completion"] = existing.get("Total Completion", 0) + new.get("Total Completion", 0)
+    merged["Total Tokens"] = existing.get("Total Tokens", 0) + new.get("Total Tokens", 0)
+    merged["Total Cost($)"] = existing.get("Total Cost($)", 0) + new.get("Total Cost($)", 0)
+    merged["Total Length"] = existing.get("Total Length", 0) + new.get("Total Length", 0)
+    merged["Total Count"] = existing.get("Total Count", 0) + new.get("Total Count", 0)
+
+    existing_time = time_str_to_seconds(existing.get("Total Time", "00:00:00"))
+    new_time = time_str_to_seconds(new.get("Total Time", "00:00:00"))
+    merged["Total Time"] = seconds_to_time_str(existing_time + new_time)
+    return merged
+
+def setup_model_and_chain(model_name="gpt-4o"):
+    """모델, 프롬프트 템플릿, 파서, 캐시를 설정하고 체인을 생성"""
     # 캐시 설정
     os.makedirs("cache", exist_ok=True)
     cache = SQLiteCache(database_path="cache/my_llm_cache.db")
@@ -36,7 +81,7 @@ def setup_model_and_chain():
 
     # 모델 로드
     model = ChatOpenAI(
-        model="gpt-4o",
+        model=model_name,
         max_tokens=1024,
         temperature=0,
         openai_api_key=os.getenv("OPENAI_API_KEY"),
@@ -44,9 +89,10 @@ def setup_model_and_chain():
 
     # ChatPromptTemplate 생성
     chat_prompt = ChatPromptTemplate([
-        ("system", "다음은 주어진 질문과 관련된 정보입니다. 관련된 정보를 바탕으로 주어진 질문에 대해 정확하게 답변해주세요."),
-        ("user", "{question}"),
-        ("assistant", "<정보> {context}"),
+        ("system", "다음은 주어진 질문과 관련 문서, 정답 예시입니다. 관련된 <관련 문서>와 <정답 예시>를 바탕으로 주어진 <질문>에 대해 정확하게 200자 이내로 답변해주세요."),
+        ("user", "<질문> {question}"),
+        ("assistant", "<관련 문서> {context}"),
+        ("assistant", "<정답 예시> {answer}"),
     ])
 
     # Parser 지정
@@ -57,63 +103,98 @@ def setup_model_and_chain():
 
     return chain
 
-def generate_answer(data, chain):
-    """데이터를 처리하여 모델 응답과 메타데이터를 생성합니다."""
-    rag_results = []
-    metadata = {
+def generate_answer(new_data, chain, output_path, existing_results, model_name='gpt-4o'):
+    """데이터를 처리하여 모델 응답과 메타데이터를 생성"""
+    new_results = []
+    new_metadata = {
         "Total Prompt": 0,
         "Total Completion": 0,
         "Total Tokens": 0,
-        "Total Cost": 0,
+        "Total Cost($)": 0,
         "Total Length": 0,
         "Total Count": 0,
-        "Total Time": 0,
+        "Total Time": "00:00:00",
     }
 
+    batch_size = 100    # 100개마다 체크포인트 저장
     start = time.time()
-    for item in tqdm(data, desc="Generating answers"):
+
+    for i, item in enumerate(tqdm(new_data, desc="Generating answers")):
         question = item.get('question', '')
         context = item.get('context', '')
+        answer = item.get('answer', '')
 
         with get_openai_callback() as cb:
-            response = chain.invoke({"question": question, "context": context})
-            item['rag_answer'] = response
+            response = chain.invoke({"question": question, "context": context, "answer": answer})
+            item[f'{model_name}_answer'] = response
 
             # 결과 저장
-            rag_results.append(item)
+            new_results.append(item)
 
             # 메타데이터 업데이트
             prompt_length = len(question) + len(context)
-            metadata["Total Prompt"] += cb.prompt_tokens
-            metadata["Total Completion"] += cb.completion_tokens
-            metadata["Total Tokens"] += cb.total_tokens
-            metadata["Total Cost"] += cb.total_cost
-            metadata["Total Length"] += prompt_length
-            metadata["Total Count"] += 1
-    end = time.time()
-    elapsed = end - start
-    formatted_time = time.strftime("%H:%M:%S", time.gmtime(elapsed))    # 시:분:초 형식으로 변환
-    metadata["Total Time"] = formatted_time
+            new_metadata["Total Prompt"] += cb.prompt_tokens
+            new_metadata["Total Completion"] += cb.completion_tokens
+            new_metadata["Total Tokens"] += cb.total_tokens
+            new_metadata["Total Cost($)"] += cb.total_cost
+            new_metadata["Total Length"] += prompt_length
+            new_metadata["Total Count"] += 1
 
-    return rag_results, metadata
+        if (i + 1) % batch_size == 0:
+            elapsed = time.time() - start
+            new_metadata["Total Time"] = seconds_to_time_str(elapsed)
+            combined_data = existing_results.get("data", []) + new_results
+            combined_metadata = merge_metadata(existing_results.get("metadata", {}), new_metadata)
+            checkpoint = {
+                "Model": model_name,
+                "Datetime": datetime.now().strftime("%H:%M:%S"),
+                "metadata": combined_metadata,
+                "data": combined_data
+            }
+            save_results(output_path, checkpoint)
+            print(f"Checkpoint saved at {output_path}")
+
+    elapsed = time.time() - start
+    new_metadata["Total Time"] = seconds_to_time_str(elapsed)
+    combined_data = existing_results.get("data", []) + new_results
+    combined_metadata = merge_metadata(existing_results.get("metadata", {}), new_metadata)
+    final_results = {
+        "Model": model_name,
+        "Datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "metadata": combined_metadata,
+        "data": combined_data
+    }
+    save_results(output_path, final_results)
+    print(f"Final results saved at {output_path}")
+
+    return new_results, new_metadata
 
 
 
 def main():
-    input_path = "../../IR_data/collection/qas_hard_clipped_context.jsonl"
+    input_path = "../../IR_data/collection/qas_hard_for_rag.jsonl"
     data = load_data(input_path)
-    data = data[:10]    # 일부 데이터만 사용
+    data = data[:1000]    # 일부 데이터만 사용
 
-    # 모델 및 체인 설정
-    chain = setup_model_and_chain()
+    # 모델 및 경로 설정
+    model_name = "gpt-4o-mini"
+    final_output_path = f"rag/{model_name}/qas_hard_rag_1000_true.json"
+
+    # 기존 결과 로드
+    existing_results = load_existing_results(final_output_path)
+    existing_data = existing_results.get("data", [])
+
+    start_idx = len(existing_data)
+    if start_idx >= len(data):
+        print("All data has been processed.")
+        return
+    new_data = data[start_idx:]
+
+    # 체인 설정
+    chain = setup_model_and_chain(model_name)
 
     # 답변 생성
-    rag_results, metadata = generate_answer(data, chain)
-
-    # 결과 저장
-    results = {"Datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "metadata": metadata, "data": rag_results}
-    output_path = "rag/qas_hard_rag.json"
-    save_results(output_path, results)
+    new_results, new_metadata = generate_answer(new_data, chain, final_output_path, existing_results, model_name)
 
     print("Done!")
 
