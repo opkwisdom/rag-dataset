@@ -2,6 +2,7 @@ from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 from kiwipiepy import Kiwi
 import json
+import os
 from collections import OrderedDict
 from argparse import ArgumentParser
 
@@ -56,16 +57,40 @@ class CandidateGenerator:
 
         return filtered_result
 
-def find_start_indices(data):
-    contents = data['contents']
-    candidates = data['candidates']
+def find_start_indices(total_data, total_candidates):
+    assert len(total_data) == len(total_candidates)
 
-    candidate_indices = []
-    for candidate in candidates:
-        start_idx = contents.find(candidate)
-        candidate_indices.append((candidate, start_idx))
+    new_data = []
+    for i in tqdm(range(len(total_data)),
+                  desc=f'Attach indices file {args.file_postfix}',
+                  position=int(args.file_postfix),
+                  total=len(total_data),
+                  ncols=180):
+        data = total_data[i]
+        candidates = total_candidates[i]
+        contents = data['context']
 
-    return candidate_indices
+        candidate_with_indices = []
+        for candidate in candidates:
+            start_idx = contents.find(candidate)
+            candidate_with_indices.append((candidate, start_idx))
+        data['candidates'] = candidate_with_indices
+        new_data.append(data)
+    return new_data
+
+def load_data(filepath):
+    '''
+    Load jsonl file
+    '''
+    _, ext = os.path.splitext(filepath)
+    if ext == '.jsonl':
+        with open(filepath, 'r') as f:
+            data = [json.loads(d) for d in f]
+    elif ext == '.json':
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+    return data
+
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -77,36 +102,27 @@ if __name__ == "__main__":
     infile_path = args.infile_path + "_" + args.file_postfix + ".jsonl"
     outfile_path = args.outfile_path + "_" + args.file_postfix + ".jsonl"
 
-    with open(infile_path, 'r', encoding='utf-8') as f:
-        data = [json.loads(item) for item in f]
+    data = load_data(infile_path)
 
     # Candidate Generator Test
-    # generator = CandidateGenerator()
-    # candidates = []
-    # # import pdb; pdb.set_trace()
-    # for i, item in enumerate(tqdm(data, desc='Tokenizing ', position=int(args.file_postfix), total=len(data), ncols=180)):
-    #     try:
-    #         candidate_words = generator.tokenize(item['contents'])
-    #         candidates.append(candidate_words)
-    #     except UnicodeDecodeError:
-    #         print(f"UnicodeDecodeError at {i}")
-    #         continue
-
-    # with open(outfile_path, 'w') as f:
-    #     for candi, line in zip(candidates, data):
-    #         line['candidates'] = candi
-    #         json_line = json.dumps(line, ensure_ascii=False)
-    #         f.write(json_line + '\n')
-
-
+    generator = CandidateGenerator()
     candidates = []
-
-    for i, item in enumerate(tqdm(data, desc=f'Tokenizing {args.file_postfix}', position=int(args.file_postfix), total=len(data), ncols=180)):
-        candidate_words = find_start_indices(item)
-        candidates.append(candidate_words)
+    # import pdb; pdb.set_trace()
+    for i, item in enumerate(tqdm(data,
+                                  desc=f'Tokenizing file {args.file_postfix}',
+                                  position=int(args.file_postfix),
+                                  total=len(data),
+                                  ncols=180)):
+        try:
+            candidate_words = generator.tokenize(item['context'])
+            candidates.append(candidate_words)
+        except UnicodeDecodeError:
+            print(f"UnicodeDecodeError at {i}")
+            continue
+    # Attach index
+    data = find_start_indices(data, candidates)
 
     with open(outfile_path, 'w') as f:
-        for candi, line in zip(candidates, data):
-            line['candidates'] = candi
+        for line in data:
             json_line = json.dumps(line, ensure_ascii=False)
             f.write(json_line + '\n')

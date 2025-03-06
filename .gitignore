@@ -12,6 +12,8 @@ KE/PromptRank
 *.log
 *.gguf
 *.pt
+*.txt
 
 # Cache files
 __pycache__
+cache/
