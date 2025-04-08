@@ -1,12 +1,14 @@
+import os
 import json
+import torch
 import numpy as np
+from tqdm import tqdm
 from argparse import ArgumentParser
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from torch.utils.data import DataLoader
-from torch.nn.parallel import DistributedDataParallel as DDP    # Multi-gpu
+from torch.utils.data import DataLoader, ConcatDataset
 
 from utils import set_config, setup_logger
-from prompt_ranker import CachedPromptRanker
+from prompt_ranker import IDFPromptRanker, idf_computation
 from data import EfficientDataProcessor, custom_collate_fn
 
 
@@ -46,7 +48,7 @@ def main():
     args = parse_argument()
 
     logger = setup_logger(args.log_dir, args.log_filename)
-    logger.info("Start Testing ...")
+    logger.info("Start KE ...")
 
     model = AutoModelForSeq2SeqLM.from_pretrained(config['model_path'])
     model.to(config['device'])
@@ -54,12 +56,16 @@ def main():
 
     logger.info(f"Model: {model}")
 
-    # Make dataset
+    
     data_processor = EfficientDataProcessor(tokenizer, logger, config, args)
-    kpe_dataset, doc_list, doc_id_list = data_processor.generate_dataset()
+    kpe_dataset, doc_list, doc_id_list, candidate_list = data_processor.generate_dataset()
+
+    logger.info('Computing IDF ...')
+    idfs = idf_computation(doc_list, candidate_list)
+    logger.info('IDF computation finished.')
 
     dataloader = DataLoader(kpe_dataset, batch_size=args.batch_size, collate_fn=custom_collate_fn)
-    prompt_ranker = CachedPromptRanker(model, tokenizer, logger, config, args)
+    prompt_ranker = IDFPromptRanker(model, tokenizer, idfs, logger, config, args)
     keyphrases = prompt_ranker.extract_keyphrases(dataloader, doc_list, doc_id_list)
 
     with open(args.output_dir, "w") as f:

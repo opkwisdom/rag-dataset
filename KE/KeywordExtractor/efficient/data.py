@@ -1,3 +1,4 @@
+import os
 import json
 from tqdm import tqdm
 import torch
@@ -78,8 +79,13 @@ class EfficientDataProcessor:
         Load jsonl file
         '''
         self.logger.info(f'Reading file...')
-        with open(filepath, 'r') as f:
-            self.data = [json.loads(d) for d in f]
+        _, ext = os.path.splitext(filepath)
+        if ext == '.jsonl':
+            with open(filepath, 'r') as f:
+                self.data = [json.loads(d) for d in f]
+        elif ext == '.json':
+            with open(filepath, 'r') as f:
+                self.data = json.load(f)
 
     def generate_dataset(self):
         '''
@@ -89,13 +95,14 @@ class EfficientDataProcessor:
         cans_pairs = []
         doc_list = []
         doc_id_list = []
+        candidate_list = []
 
         save_mode = self.config.get("save_mode", False)
         chunk_size = 100000  # 저장할 예제 수 간격
         chunk_counter = 0   # 저장 chunk 번호
 
         for idx, json_data in enumerate(tqdm(self.data, desc="Generate dataset ")):
-            doc_id, candidates, doc = json_data['id'], json_data['candidates'], json_data['contents']
+            doc_id, candidates, doc = json_data['id'], json_data['candidates'], json_data['context']
             
             # Generate docs_pairs for constructing dataset 
             doc = self.en_temp + "\"" + doc + "\""
@@ -111,22 +118,8 @@ class EfficientDataProcessor:
                 
                 doc_list.append(doc)
                 doc_id_list.append(doc_id)
-
-                if save_mode and len(docs_pairs) >= chunk_size:
-                    doc_pair_dataset = DocPairDataset(docs_pairs)
-                    candidate_pair_dataset = CandidatePairDataset(cans_pairs)
-                    kpe_dataset = KPE_Dataset(doc_pair_dataset, candidate_pair_dataset)
-                    
-                    output_path = f"{self.args.output_dir}_{chunk_counter}.pt"
-                    torch.save((kpe_dataset, doc_list, doc_id_list), output_path)
-                    self.logger.info(f"Chunk {chunk_counter} saved with {len(docs_pairs)} examples at {output_path}")
-                    
-                    # 저장 후 리스트 초기화
-                    docs_pairs = []
-                    cans_pairs = []
-                    doc_list = []
-                    doc_id_list = []
-                    chunk_counter += 1
+                candis = [candi for candi, _ in candidates]
+                candidate_list.append(candis)
         
         # Construct dataset
         # 남은 데이터가 있을 경우 처리
@@ -142,7 +135,7 @@ class EfficientDataProcessor:
             else:
                 self.logger.info(f"Original examples: {len(self.data)}")
                 self.logger.info(f"Total examples: {len(doc_pair_dataset)}")
-                return kpe_dataset, doc_list, doc_id_list
+                return kpe_dataset, doc_list, doc_id_list, candidate_list
             
     
     def generate_doc_pairs(self, doc, candidates, idx):

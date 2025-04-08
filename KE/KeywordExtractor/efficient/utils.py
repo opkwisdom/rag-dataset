@@ -13,7 +13,7 @@ def set_config():
     config["length_factor"] = 1.1
     config['max_len'] = 512
     config["device"] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    config['save_mode'] = True
+    config['save_mode'] = False
     return config
 
 def setup_logger(log_dir, log_filename="app.log", log_level=logging.INFO):
