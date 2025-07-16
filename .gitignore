@@ -1,0 +1,25 @@
+# bm25
+bm25/index
+bm25/anserini
+
+# Data files
+*.json
+*.jsonl
+*.jar
+*.log
+*.gguf
+*.pt
+*.txt
+**/dpr_*
+**/raw_data
+
+# Cache files
+__pycache__
+cache/
+.vscode/
+DPR/shell/outputs
+Experiment/shell/outputs
+
+# Folder
+Fine-NS
+**/wandb

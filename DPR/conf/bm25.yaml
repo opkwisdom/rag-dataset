@@ -1,0 +1,18 @@
+defaults:
+  - datasets: retriever_default # contains a list of all possible sources of queries for evaluation. Specific set is selected by qa_dataset parameter
+  - ctx_sources: default_sources # contains a list of all possible passage sources. Specific passages sources selected by ctx_datatsets parameter
+
+# the name of the queries dataset from the 'datasets' config group
+qa_dataset:
+
+# a list of names of the passages datasets from the 'ctx_sources' config group
+ctx_datatsets:
+
+# LuceneSearcher path
+index_path:
+
+out_file:
+# "regex" or "string"
+match: string
+n_docs: 100
+validation_workers: 16

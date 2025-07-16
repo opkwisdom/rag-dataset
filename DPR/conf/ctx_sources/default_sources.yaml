@@ -1,0 +1,13 @@
+# @package _group_
+
+dpr_wiki:
+  _target_: dpr.data.retriever_data.CsvCtxSrc
+  file: data.wikipedia_split.psgs_w100
+  id_prefix: 'wiki:'
+
+
+##### Our Datasets #####
+
+dpr_kisti:
+  _target_: dpr.data.retriever_data.OurJsonlCtxSrc
+  file: /home/junho/KeyRAG/data/KISTI/collection/passages.jsonl
