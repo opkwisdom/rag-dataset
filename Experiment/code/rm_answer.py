@@ -28,6 +28,7 @@ if __name__ == "__main__":
     filtered_data = []
     for item in data:
         item.pop('answer')
+        item.pop('gold_passage_id')
         filtered_data.append(item)
 
     # 필터링된 데이터 저장
