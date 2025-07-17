@@ -1,7 +1,7 @@
 #!/bin/bash
 
-INFILE="/home/junho/KeyRAG/data/KISTI/idf_cand/qas_idf_candidate.json"
-OUTFILE="result/data-stat/data_stat_2.json"
+INFILE="/home/junho/KeyRAG/data/K-RAG/train_dataset/test.json"
+OUTFILE="result/data-stat/test.json"
 
 python code/get_data_stat.py \
     --input_file "${INFILE}" \

@@ -6,8 +6,9 @@ from argparse import ArgumentParser
 from main_metrics import save_results
 
 def base_stat(data):
-    context_lengths = [len(item["context"]) for item in data]
+    question_lengths = [len(item["question"]) for item in data]
     answer_lengths = [len(item["answer"]) for item in data]
+    keysentences = [' '.join(item["key_sentences"]["sentences"]) for item in data]
 
     def length_summary(lengths):
         return {
@@ -19,8 +20,9 @@ def base_stat(data):
 
     return {
         "total_count": len(data),
-        "context_length": length_summary(context_lengths),
+        "question_length": length_summary(question_lengths),
         "answer_length": length_summary(answer_lengths),
+        "keysentences_length": length_summary([len(sentence.split()) for sentence in keysentences]),
     }
 
 
